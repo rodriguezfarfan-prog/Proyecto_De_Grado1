@@ -1,0 +1,47 @@
+{
+  "version": "1.0.0",
+  "description": "Contrato de datos para la API de FinUp",
+  "entities": {
+    "Usuario": {
+      "fields": {
+        "id": "string (UUID)",
+        "nombre": "string",
+        "email": "string (email)",
+        "fecha_registro": "string (ISO 8601)",
+        "nivel_financiero": "enum (principiante|intermedio|avanzado)"
+      }
+    },
+    "Ingreso": {
+      "fields": {
+        "id": "string (UUID)",
+        "usuario_id": "string (UUID)",
+        "monto": "decimal(12,2)",
+        "fecha": "string (ISO 8601)",
+        "descripcion": "string?",
+        "tipo": "enum (mensual|ocasional|beca|trabajo)"
+      }
+    },
+    "Egreso": {
+      "fields": {
+        "id": "string (UUID)",
+        "usuario_id": "string (UUID)",
+        "monto": "decimal(12,2)",
+        "fecha": "string (ISO 8601)",
+        "descripcion": "string?",
+        "categoria": "enum (alimentacion|transporte|ocio|vivienda|educacion|otros)",
+        "recurrente": "boolean"
+      }
+    },
+    "MetaAhorro": {
+      "fields": {
+        "id": "string (UUID)",
+        "usuario_id": "string (UUID)",
+        "nombre": "string",
+        "monto_objetivo": "decimal(12,2)",
+        "monto_actual": "decimal(12,2)",
+        "fecha_limite": "string (ISO 8601)",
+        "descripcion": "string?"
+      }
+    }
+  }
+}
