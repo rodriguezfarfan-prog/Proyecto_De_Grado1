@@ -1,25 +1,25 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '/di/injection_container.dart';
-import '/domain/simulacion/usecases/simular_optimizacion.dart';
-import '/domain/simulacion/entities/comparativa_gastos.dart';
+import '/domain/simulacion_compra/usecases/simular_compra.dart';
+import '/domain/simulacion_compra/entities/datos_compra.dart';
+import '/domain/simulacion_compra/entities/resultado_simulacion.dart';
 import '/presentation/shared/base_view_model.dart';
-import '/core/usecase.dart';
 
-final simulacionViewModelProvider =
-    StateNotifierProvider<SimulacionViewModel, BaseState<ComparativaGastos>>(
-  (ref) => SimulacionViewModel(sl<SimularOptimizacion>()),
+final simulacionCompraViewModelProvider =
+    StateNotifierProvider<SimulacionCompraViewModel, BaseState<ResultadoSimulacion>>(
+  (ref) => SimulacionCompraViewModel(sl<SimularCompra>()),
 );
 
-class SimulacionViewModel extends BaseViewModel<ComparativaGastos> {
-  final SimularOptimizacion _useCase;
-  SimulacionViewModel(this._useCase);
+class SimulacionCompraViewModel extends BaseViewModel<ResultadoSimulacion> {
+  final SimularCompra _simularCompra;
+  SimulacionCompraViewModel(this._simularCompra);
 
-  Future<void> cargarSimulacion() async {
+  Future<void> calcular(DatosCompra datos) async {
     emitLoading();
-    final result = await _useCase(NoParams());
+    final result = await _simularCompra(datos);
     result.fold(
       (failure) => emitError(failure.message),
-      (data) => emitData(data),
+      (res) => emitData(res),
     );
   }
 }

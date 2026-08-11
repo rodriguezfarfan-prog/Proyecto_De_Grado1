@@ -7,7 +7,7 @@ class Usuario {
   final DateTime fechaRegistro;
   final NivelFinanciero nivelFinanciero;
 
-  Usuario({
+  const Usuario({
     required this.id,
     required this.nombre,
     required this.email,

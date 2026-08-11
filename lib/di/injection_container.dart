@@ -28,6 +28,7 @@ import '/domain/diagnostico/usecases/realizar_diagnostico.dart';
 import '/domain/simulacion/usecases/simular_optimizacion.dart';
 import '/domain/ahorro/usecases/planificar_ahorro.dart';
 import '/domain/recomendacion/usecases/generar_recomendaciones.dart';
+import '/domain/simulacion_compra/usecases/simular_compra.dart';
 
 final sl = GetIt.instance;
 
@@ -58,4 +59,7 @@ Future<void> initDependencies() async {
   sl.registerLazySingleton<SimularOptimizacion>(() => SimularOptimizacion(sl<EgresoRepository>()));
   sl.registerLazySingleton<PlanificarAhorro>(() => PlanificarAhorro(sl<MetaAhorroRepository>(), sl<IngresoRepository>()));
   sl.registerLazySingleton<GenerarRecomendaciones>(() => GenerarRecomendaciones(sl<EgresoRepository>()));
+  sl.registerLazySingleton<SimularCompra>(
+  () => SimularCompra(sl<IngresoRepository>(), sl<EgresoRepository>()),
+);
 }
