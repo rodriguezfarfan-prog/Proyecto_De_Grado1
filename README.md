@@ -1,4 +1,4 @@
-# fin_up_project
+# project
 
 A new Flutter project.
 
