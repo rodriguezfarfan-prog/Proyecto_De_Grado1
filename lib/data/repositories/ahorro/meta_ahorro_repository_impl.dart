@@ -1,19 +1,22 @@
 import 'package:dartz/dartz.dart';
-import '/core/errors/failure.dart';
-import '/data/datasources/remote/remote_meta_ahorro_datasource.dart';
-import '/data/models/meta_ahorro_model.dart';
-import '/domain/ahorro/entities/meta_ahorro.dart';
-import '/domain/ahorro/repositories/meta_ahorro_repository.dart';
+import 'package:fin_up_project/core/errors/failure.dart';
+import 'package:fin_up_project/data/datasources/remote/remote_meta_ahorro_datasource.dart';
+import 'package:fin_up_project/data/models/meta_ahorro_model.dart';
+import 'package:fin_up_project/domain/ahorro/entities/meta_ahorro.dart';
+import 'package:fin_up_project/domain/ahorro/repositories/meta_ahorro_repository.dart';
+import 'package:fin_up_project/domain/usuario/repositories/auth_repository.dart';
 
 class MetaAhorroRepositoryImpl implements MetaAhorroRepository {
   final RemoteMetaAhorroDataSource remoteDataSource;
-  MetaAhorroRepositoryImpl(this.remoteDataSource);
+  final AuthRepository authRepository;
 
-  static const String userId = 'USER_UUID_DE_PRUEBA';
+  MetaAhorroRepositoryImpl(this.remoteDataSource, this.authRepository);
 
   @override
   Future<Either<Failure, List<MetaAhorro>>> obtenerMetas() async {
     try {
+      final userId = await authRepository.obtenerUserId();
+      if (userId == null) return Left(ServerFailure('No hay sesión activa'));
       final models = await remoteDataSource.fetchMetas(userId);
       return Right(models.map((m) => m.toDomain()).toList());
     } catch (e) {
@@ -24,12 +27,15 @@ class MetaAhorroRepositoryImpl implements MetaAhorroRepository {
   @override
   Future<Either<Failure, Unit>> guardarMeta(MetaAhorro meta) async {
     try {
+      final userId = await authRepository.obtenerUserId();
+      if (userId == null) return Left(ServerFailure('No hay sesión activa'));
       final model = MetaAhorroModel(
         id: meta.id,
         usuarioId: userId,
         nombre: meta.nombre,
         montoObjetivo: meta.montoObjetivo.valor,
         montoActual: meta.montoActual.valor,
+        abonoMensualFijo: meta.abonoMensualFijo, // ← NUEVO
         fechaLimite: meta.fechaLimite.toIso8601String(),
         descripcion: meta.descripcion,
       );
@@ -47,6 +53,16 @@ class MetaAhorroRepositoryImpl implements MetaAhorroRepository {
       return const Right(unit);
     } catch (e) {
       return Left(ServerFailure('Error al eliminar meta: $e'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Unit>> agregarAbono(String id, double monto) async {
+    try {
+      await remoteDataSource.agregarAbono(id, monto);
+      return const Right(unit);
+    } catch (e) {
+      return Left(ServerFailure('Error al agregar abono: $e'));
     }
   }
 }

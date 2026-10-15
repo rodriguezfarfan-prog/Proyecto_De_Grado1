@@ -1,8 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// ──────────────────────────────────────────────
-// ViewModel base
-// ──────────────────────────────────────────────
 abstract class BaseViewModel<T> extends StateNotifier<BaseState<T>> {
   BaseViewModel() : super(BaseState<T>.initial());
 
@@ -11,16 +8,13 @@ abstract class BaseViewModel<T> extends StateNotifier<BaseState<T>> {
   void emitError(String message) => state = BaseState<T>.error(message);
 }
 
-// ──────────────────────────────────────────────
-// Estados sellados
-// ──────────────────────────────────────────────
 sealed class BaseState<T> {
-  const BaseState._(); // constructor privado para evitar instancias externas
+  const BaseState._();
 
   const factory BaseState.initial() = Initial<T>;
   const factory BaseState.loading() = Loading<T>;
   const factory BaseState.data(T value) = Data<T>;
-  const factory BaseState.error(String message) = Error<T>;
+  const factory BaseState.error(String message) = ErrorState<T>;
 }
 
 class Initial<T> extends BaseState<T> {
@@ -36,14 +30,11 @@ class Data<T> extends BaseState<T> {
   const Data(this.value) : super._();
 }
 
-class Error<T> extends BaseState<T> {
+class ErrorState<T> extends BaseState<T> {
   final String message;
-  const Error(this.message) : super._();
+  const ErrorState(this.message) : super._();
 }
 
-// ──────────────────────────────────────────────
-// Extensión para usar .when() en las vistas
-// ──────────────────────────────────────────────
 extension BaseStateWhen<T> on BaseState<T> {
   R when<R>({
     required R Function() initial,
@@ -54,7 +45,7 @@ extension BaseStateWhen<T> on BaseState<T> {
     if (this is Initial) return initial();
     if (this is Loading) return loading();
     if (this is Data) return data((this as Data<T>).value);
-    if (this is Error) return error((this as Error<T>).message);
+    if (this is ErrorState) return error((this as ErrorState<T>).message);
     throw Exception('Estado desconocido');
   }
 }

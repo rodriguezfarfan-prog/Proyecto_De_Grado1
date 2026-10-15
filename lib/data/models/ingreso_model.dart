@@ -1,12 +1,12 @@
-import '/domain/diagnostico/entities/ingreso.dart';
-import '/core/value_objects/monto.dart';
-import '/core/value_objects/fecha.dart';
+import 'package:fin_up_project/domain/diagnostico/entities/ingreso.dart';
+import 'package:fin_up_project/core/value_objects/monto.dart';
+import 'package:fin_up_project/core/value_objects/fecha.dart';
 
 class IngresoModel {
   final String id;
   final String usuarioId;
   final double monto;
-  final String fecha; // ISO 8601
+  final String fecha;
   final String? descripcion;
   final String tipo;
 
@@ -19,16 +19,14 @@ class IngresoModel {
     required this.tipo,
   });
 
-  factory IngresoModel.fromJson(Map<String, dynamic> json) {
-  return IngresoModel(
+  factory IngresoModel.fromJson(Map<String, dynamic> json) => IngresoModel(
     id: json['id'],
     usuarioId: json['usuario_id'],
     monto: (json['monto'] as num).toDouble(),
     fecha: json['fecha'],
     descripcion: json['descripcion'],
-    tipo: json['tipo'],
+    tipo: json['tipo'] ?? 'otros',
   );
-}
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -44,6 +42,9 @@ class IngresoModel {
     monto: Monto(monto),
     fecha: FechaFinanciera(DateTime.parse(fecha)),
     descripcion: descripcion,
-    tipo: TipoIngreso.values.firstWhere((e) => e.name == tipo),
+    tipo: TipoIngreso.values.firstWhere(
+      (e) => e.name == tipo,
+      orElse: () => TipoIngreso.otros,
+    ),
   );
 }

@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:go_router/go_router.dart';
 import '../viewmodels/dashboard_viewmodel.dart';
 import '/presentation/shared/base_view_model.dart';
+import 'package:fin_up_project/core/utils/formato_moneda.dart';
+import 'package:fin_up_project/core/services/notification_service.dart';
+import 'package:fin_up_project/presentation/gamificacion/viewmodels/gamificacion_viewmodel.dart';
+import 'package:fin_up_project/presentation/gamificacion/views/racha_widget.dart';
+import 'package:fin_up_project/presentation/gamificacion/views/racha_popup.dart';
+import 'package:fin_up_project/domain/gamificacion/entities/perfil_gamificacion.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -24,12 +31,32 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
       vsync: this,
       duration: const Duration(milliseconds: 1300),
     );
-    _anim = CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic);
-
-    // Carga automática al abrir la pantalla
-    Future.microtask(
-      () => ref.read(dashboardViewModelProvider.notifier).cargarDashboard(),
+    _anim = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
     );
+
+    Future.microtask(() async {
+      await ref.read(dashboardViewModelProvider.notifier).cargarDashboard();
+
+      // 🔥 Registrar visita del día y obtener datos de la racha
+      final gamif = ref.read(gamificacionViewModelProvider.notifier);
+      final result = await gamif.registrarRacha();
+
+      final puntosRacha = result['puntosOtorgados'] as int;
+      final rachaActual = result['rachaActual'] as int;
+
+      // 🔔 Programar recordatorio 1 hora antes
+      await NotificationService.programarRecordatorioRacha(rachaActual);
+
+      // Mostrar popup solo si ganó puntos (primera vez del día)
+      if (puntosRacha > 0 && mounted) {
+        await mostrarRachaPopup(context, rachaActual, puntosRacha);
+      }
+
+      // Recargar perfil para actualizar el fueguito
+      await gamif.cargarPerfil();
+    });
   }
 
   @override
@@ -41,6 +68,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
   Future<void> _onRefresh() async {
     _animController.reset();
     await ref.read(dashboardViewModelProvider.notifier).cargarDashboard();
+    await ref.read(gamificacionViewModelProvider.notifier).cargarPerfil();
   }
 
   @override
@@ -52,18 +80,39 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
         title: const Text('Dashboard Financiero'),
         centerTitle: true,
         elevation: 0,
+        actions: [
+          Consumer(
+            builder: (context, ref, _) {
+              final gamifState = ref.watch(gamificacionViewModelProvider);
+              final racha = gamifState is Data<PerfilGamificacion>
+                  ? (gamifState as Data<PerfilGamificacion>).value.rachaActual
+                  : 0;
+              return Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Center(child: RachaWidget(racha: racha)),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.person_outline),
+            onPressed: () async {
+              await context.push('/perfil');
+              if (mounted) {
+                ref.read(dashboardViewModelProvider.notifier).cargarDashboard();
+                ref.read(gamificacionViewModelProvider.notifier).cargarPerfil();
+              }
+            },
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _onRefresh,
         child: state.when(
-          initial: () => const _CenteredScrollable(
-            child: CircularProgressIndicator(),
-          ),
-          loading: () => const _CenteredScrollable(
-            child: CircularProgressIndicator(),
-          ),
+          initial: () =>
+              const _CenteredScrollable(child: CircularProgressIndicator()),
+          loading: () =>
+              const _CenteredScrollable(child: CircularProgressIndicator()),
           data: (data) {
-            // Disparar animación cuando llegan los datos
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!_animController.isAnimating &&
                   _animController.status != AnimationStatus.completed) {
@@ -71,7 +120,20 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
               }
             });
 
-            final d = data.diagnostico; // DiagnosticoResultado
+            final d = data.diagnostico;
+
+            // Ahorro abonado a metas este mes
+            final ahorroAbonado = d.actualPorGrupo['ahorro_deuda'] ?? 0.0;
+
+            // Egresos reales (sin contar el grupo ahorro_deuda)
+            final egresosReales = (d.totalEgresos - ahorroAbonado)
+                .clamp(0, double.infinity)
+                .toDouble();
+
+            // Capacidad de ahorro restante (lo que le queda por ahorrar este mes)
+            final capacidadRestante = (d.capacidadAhorro - ahorroAbonado)
+                .clamp(0, double.infinity)
+                .toDouble();
 
             return SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -79,16 +141,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Hábito financiero ─────────────────────────────────
                   _HabitoBadge(habito: d.habito),
                   const SizedBox(height: 24),
-
-                  // ── Gráfico donut animado ─────────────────────────────
                   AnimatedBuilder(
                     animation: _anim,
                     builder: (context, _) => _DonutChart(
                       totalIngresos: d.totalIngresos,
-                      totalEgresos: d.totalEgresos,
+                      totalEgresos: egresosReales,
                       capacidadAhorro: d.capacidadAhorro,
                       porcentajeAhorro: d.porcentajeAhorro,
                       animValue: _anim.value,
@@ -97,24 +156,25 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
                     ),
                   ),
                   const SizedBox(height: 24),
-
-                  // ── Tarjetas ingresos / egresos / ahorro ──────────────
                   _MetricRow(
                     totalIngresos: d.totalIngresos,
-                    totalEgresos: d.totalEgresos,
+                    totalEgresos: egresosReales,
                     capacidadAhorro: d.capacidadAhorro,
                   ),
                   const SizedBox(height: 16),
-
-                  // ── Capacidad de ahorro detallada ─────────────────────
                   _SavingCard(
-                    capacidadAhorro: d.capacidadAhorro,
+                    capacidadAhorro: capacidadRestante,
                     porcentajeAhorro: d.porcentajeAhorro,
                   ),
+                  const SizedBox(height: 16),
+
+                  // ── Ahorrado este mes ────────────────────────────────
+                  _AhorradoMesCard(montoAhorrado: ahorroAbonado),
+
                   const SizedBox(height: 20),
 
                   // ── Recomendaciones básicas ───────────────────────────
-                  if (d.recomendacionesBasicas.isNotEmpty) ...[
+                  if (d.recomendaciones.isNotEmpty) ...[
                     const Text(
                       'Recomendaciones',
                       style: TextStyle(
@@ -123,8 +183,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
                       ),
                     ),
                     const SizedBox(height: 10),
-                    ...d.recomendacionesBasicas.map(
-                      (rec) => _RecomendacionItem(texto: rec),
+                    ...d.recomendaciones.map(
+                      (rec) => _RecomendacionItem(
+                        texto: '${rec.subcategoria}: ${rec.mensaje}',
+                      ),
                     ),
                   ],
                   const SizedBox(height: 16),
@@ -181,20 +243,20 @@ class _DonutChart extends StatelessWidget {
   });
 
   static const _colorIngreso = Color(0xFF4CAF50);
-  static const _colorEgreso  = Color(0xFFF44336);
-  static const _colorAhorro  = Color(0xFF2196F3);
+  static const _colorEgreso = Color(0xFFF44336);
+  static const _colorAhorro = Color(0xFF2196F3);
 
   Color get _habitoColor {
     if (porcentajeAhorro >= 20) return _colorIngreso;
     if (porcentajeAhorro >= 10) return const Color(0xFF2196F3);
-    if (porcentajeAhorro >= 0)  return const Color(0xFFFFC107);
+    if (porcentajeAhorro >= 0) return const Color(0xFFFFC107);
     return _colorEgreso;
   }
 
   @override
   Widget build(BuildContext context) {
-    final ahorro = capacidadAhorro.clamp(0.0, double.infinity);
-    final total  = totalIngresos + totalEgresos + ahorro;
+    final ahorro = capacidadAhorro.clamp(0.0, double.infinity).toDouble();
+    final total = totalIngresos + totalEgresos + ahorro;
     if (total == 0) return const SizedBox(height: 240);
 
     final sections = [
@@ -204,7 +266,9 @@ class _DonutChart extends StatelessWidget {
         radius: touchedIndex == 0 ? 54 : 46,
         title: touchedIndex == 0 ? _fmt(totalIngresos) : '',
         titleStyle: const TextStyle(
-          color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold,
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
         ),
       ),
       PieChartSectionData(
@@ -213,7 +277,9 @@ class _DonutChart extends StatelessWidget {
         radius: touchedIndex == 1 ? 54 : 46,
         title: touchedIndex == 1 ? _fmt(totalEgresos) : '',
         titleStyle: const TextStyle(
-          color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold,
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
         ),
       ),
       PieChartSectionData(
@@ -222,7 +288,9 @@ class _DonutChart extends StatelessWidget {
         radius: touchedIndex == 2 ? 54 : 46,
         title: touchedIndex == 2 ? _fmt(ahorro) : '',
         titleStyle: const TextStyle(
-          color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold,
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
         ),
       ),
     ];
@@ -250,7 +318,6 @@ class _DonutChart extends StatelessWidget {
               ),
             ),
           ),
-          // Texto central animado
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -275,7 +342,7 @@ class _DonutChart extends StatelessWidget {
 
   String _fmt(double v) {
     if (v >= 1000000) return '\$${(v / 1000000).toStringAsFixed(1)}M';
-    if (v >= 1000)    return '\$${(v / 1000).toStringAsFixed(0)}K';
+    if (v >= 1000) return '\$${(v / 1000).toStringAsFixed(0)}K';
     return '\$${v.toStringAsFixed(0)}';
   }
 }
@@ -319,7 +386,7 @@ class _MetricRow extends StatelessWidget {
         Expanded(
           child: _MetricCard(
             label: 'Ahorro',
-            amount: capacidadAhorro.clamp(0, double.infinity),
+            amount: capacidadAhorro.clamp(0, double.infinity).toDouble(),
             icon: Icons.savings_rounded,
             color: const Color(0xFF2196F3),
           ),
@@ -356,7 +423,7 @@ class _MetricCard extends StatelessWidget {
           Icon(icon, color: color, size: 22),
           const SizedBox(height: 6),
           Text(
-            _fmt(amount),
+            FormatoMoneda.pesos(amount),
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.bold,
@@ -370,16 +437,10 @@ class _MetricCard extends StatelessWidget {
       ),
     );
   }
-
-  String _fmt(double v) {
-    if (v >= 1000000) return '\$${(v / 1000000).toStringAsFixed(1)}M';
-    if (v >= 1000)    return '\$${(v / 1000).toStringAsFixed(0)}K';
-    return '\$${v.toStringAsFixed(0)}';
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TARJETA CAPACIDAD DE AHORRO
+// TARJETA CAPACIDAD DE AHORRO (RESTANTE)
 // ─────────────────────────────────────────────────────────────────────────────
 class _SavingCard extends StatelessWidget {
   final double capacidadAhorro;
@@ -393,7 +454,9 @@ class _SavingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isPositive = capacidadAhorro >= 0;
-    final color = isPositive ? const Color(0xFF4CAF50) : const Color(0xFFF44336);
+    final color = isPositive
+        ? const Color(0xFF4CAF50)
+        : const Color(0xFFF44336);
 
     return Container(
       width: double.infinity,
@@ -423,7 +486,7 @@ class _SavingCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '\$${capacidadAhorro.toStringAsFixed(2)}',
+                  FormatoMoneda.pesos(capacidadAhorro),
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -455,6 +518,77 @@ class _SavingCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// TARJETA AHORRADO ESTE MES
+// ─────────────────────────────────────────────────────────────────────────────
+class _AhorradoMesCard extends StatelessWidget {
+  final double montoAhorrado;
+
+  const _AhorradoMesCard({required this.montoAhorrado});
+
+  @override
+  Widget build(BuildContext context) {
+    const color = Color(0xFF2196F3);
+    final isPositive = montoAhorrado > 0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isPositive ? Icons.savings_rounded : Icons.savings_outlined,
+            color: color,
+            size: 32,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Ahorrado este mes',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  FormatoMoneda.pesos(montoAhorrado),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isPositive)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                '🎯 En marcha',
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // BADGE HÁBITO
 // ─────────────────────────────────────────────────────────────────────────────
 class _HabitoBadge extends StatelessWidget {
@@ -464,14 +598,14 @@ class _HabitoBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final config = {
-      'Excelente':  (const Color(0xFF4CAF50), Icons.star_rounded),
-      'Bueno':      (const Color(0xFF2196F3), Icons.thumb_up_rounded),
-      'Ajustado':   (const Color(0xFFFFC107), Icons.warning_rounded),
-      'Deficitario':(const Color(0xFFF44336), Icons.trending_down_rounded),
+      'Excelente': (const Color(0xFF4CAF50), Icons.star_rounded),
+      'Bueno': (const Color(0xFF2196F3), Icons.thumb_up_rounded),
+      'Ajustado': (const Color(0xFFFFC107), Icons.warning_rounded),
+      'Deficitario': (const Color(0xFFF44336), Icons.trending_down_rounded),
     };
     final entry = config[habito] ?? (Colors.grey, Icons.help_outline);
     final color = (entry.$1 as Color);
-    final icon  = (entry.$2 as IconData);
+    final icon = (entry.$2 as IconData);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -514,12 +648,13 @@ class _RecomendacionItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.lightbulb_outline_rounded,
-              color: Color(0xFFFFC107), size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(texto, style: const TextStyle(fontSize: 13)),
+          const Icon(
+            Icons.lightbulb_outline_rounded,
+            color: Color(0xFFFFC107),
+            size: 18,
           ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(texto, style: const TextStyle(fontSize: 13))),
         ],
       ),
     );

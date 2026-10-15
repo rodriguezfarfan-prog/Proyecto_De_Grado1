@@ -5,6 +5,9 @@ import '/domain/simulacion_compra/entities/datos_compra.dart';
 import '/domain/simulacion_compra/entities/metodo_pago.dart';
 import '/presentation/shared/base_view_model.dart';
 import '/domain/simulacion_compra/entities/resultado_simulacion.dart';
+import 'package:fin_up_project/presentation/gamificacion/viewmodels/gamificacion_viewmodel.dart';
+import 'package:fin_up_project/presentation/gamificacion/views/logro_popup.dart';
+import 'package:fin_up_project/domain/gamificacion/entities/logro.dart';
 
 class SimulacionPage extends ConsumerStatefulWidget {
   const SimulacionPage({super.key});
@@ -14,10 +17,10 @@ class SimulacionPage extends ConsumerStatefulWidget {
 }
 
 class _SimulacionCompraPageState extends ConsumerState<SimulacionPage> {
-  final _precioCtrl       = TextEditingController();
+  final _precioCtrl = TextEditingController();
   final _cuotaInicialCtrl = TextEditingController();
-  final _plazoCtrl        = TextEditingController();
-  final _tasaCtrl         = TextEditingController();
+  final _plazoCtrl = TextEditingController();
+  final _tasaCtrl = TextEditingController();
   TipoMetodoPago _metodoSeleccionado = TipoMetodoPago.contado;
 
   @override
@@ -31,8 +34,10 @@ class _SimulacionCompraPageState extends ConsumerState<SimulacionPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Precio del producto',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Precio del producto',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             TextField(
               controller: _precioCtrl,
               keyboardType: TextInputType.number,
@@ -40,10 +45,9 @@ class _SimulacionCompraPageState extends ConsumerState<SimulacionPage> {
             ),
             const SizedBox(height: 12),
 
-            // ── CORRECCIÓN: isExpanded + overflow en item largo ─────────
             DropdownButtonFormField<TipoMetodoPago>(
               value: _metodoSeleccionado,
-              isExpanded: true, // evita el overflow horizontal
+              isExpanded: true,
               items: const [
                 DropdownMenuItem(
                   value: TipoMetodoPago.contado,
@@ -61,7 +65,7 @@ class _SimulacionCompraPageState extends ConsumerState<SimulacionPage> {
                   value: TipoMetodoPago.compraAhoraPagaDespues,
                   child: Text(
                     'Compra ahora, paga después (Addi/Sistecrédito)',
-                    overflow: TextOverflow.ellipsis, // corta el texto si es muy largo
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 DropdownMenuItem(
@@ -71,22 +75,21 @@ class _SimulacionCompraPageState extends ConsumerState<SimulacionPage> {
               ],
               onChanged: (v) => setState(() => _metodoSeleccionado = v!),
             ),
-            // ────────────────────────────────────────────────────────────
 
             if (_metodoSeleccionado != TipoMetodoPago.contado) ...[
               const SizedBox(height: 12),
               TextField(
                 controller: _cuotaInicialCtrl,
                 keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: 'Cuota inicial (opcional)'),
+                decoration: const InputDecoration(
+                  labelText: 'Cuota inicial (opcional)',
+                ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _plazoCtrl,
                 keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: 'Plazo en meses'),
+                decoration: const InputDecoration(labelText: 'Plazo en meses'),
               ),
             ],
 
@@ -97,10 +100,12 @@ class _SimulacionCompraPageState extends ConsumerState<SimulacionPage> {
               const SizedBox(height: 12),
               TextField(
                 controller: _tasaCtrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(
-                    labelText: 'Tasa interés mensual (%) – opcional'),
+                  labelText: 'Tasa interés mensual (%) – opcional',
+                ),
               ),
             ],
 
@@ -110,7 +115,8 @@ class _SimulacionCompraPageState extends ConsumerState<SimulacionPage> {
                 controller: _tasaCtrl,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                    labelText: 'Monto total a devolver (opcional)'),
+                  labelText: 'Monto total a devolver (opcional)',
+                ),
               ),
             ],
 
@@ -118,45 +124,55 @@ class _SimulacionCompraPageState extends ConsumerState<SimulacionPage> {
             ElevatedButton.icon(
               icon: const Icon(Icons.calculate),
               label: const Text('Calcular'),
-              onPressed: () {
+              onPressed: () async {
                 final precio = double.tryParse(_precioCtrl.text) ?? 0;
                 if (precio <= 0) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Ingresa un precio válido')),
+                    const SnackBar(content: Text('Ingresa un precio válido')),
                   );
                   return;
                 }
                 final datos = DatosCompra(
                   precioProducto: precio,
-                  cuotaInicial:
-                      double.tryParse(_cuotaInicialCtrl.text) ?? 0,
+                  cuotaInicial: double.tryParse(_cuotaInicialCtrl.text) ?? 0,
                   metodo: _metodoSeleccionado,
                   plazoMeses: int.tryParse(_plazoCtrl.text),
-                  tasaInteresMensual:
-                      double.tryParse(_tasaCtrl.text) != null
-                          ? double.parse(_tasaCtrl.text) / 100
-                          : null,
+                  tasaInteresMensual: double.tryParse(_tasaCtrl.text) != null
+                      ? double.parse(_tasaCtrl.text) / 100
+                      : null,
                   montoTotalDevolver:
                       _metodoSeleccionado == TipoMetodoPago.prestamoInformal
-                          ? double.tryParse(_tasaCtrl.text)
-                          : null,
+                      ? double.tryParse(_tasaCtrl.text)
+                      : null,
                 );
                 ref
                     .read(simulacionCompraViewModelProvider.notifier)
                     .calcular(datos);
+
+                final gamif = ref.read(gamificacionViewModelProvider.notifier);
+
+                // 🎁 Logro de primer cálculo
+                final logro = await gamif.desbloquearLogro(
+                  CatalogoLogros.primerCalculo,
+                );
+                if (logro != null && mounted) {
+                  await mostrarLogroPopup(context, logro);
+                }
+
+                // ➕ Puntos recurrentes
+                await gamif.registrarAccion('calculo');
               },
             ),
 
             const SizedBox(height: 24),
             state.when(
               initial: () => const SizedBox.shrink(),
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
-              data: (resultado) =>
-                  _ResultadoWidget(resultado: resultado),
-              error: (msg) => Text('Error: $msg',
-                  style: const TextStyle(color: Colors.red)),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              data: (resultado) => _ResultadoWidget(resultado: resultado),
+              error: (msg) => Text(
+                'Error: $msg',
+                style: const TextStyle(color: Colors.red),
+              ),
             ),
 
             const SizedBox(height: 16),
@@ -169,6 +185,15 @@ class _SimulacionCompraPageState extends ConsumerState<SimulacionPage> {
       ),
     );
   }
+
+  @override
+  void dispose() {
+    _precioCtrl.dispose();
+    _cuotaInicialCtrl.dispose();
+    _plazoCtrl.dispose();
+    _tasaCtrl.dispose();
+    super.dispose();
+  }
 }
 
 class _ResultadoWidget extends StatelessWidget {
@@ -180,13 +205,13 @@ class _ResultadoWidget extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-            'Cuota mensual: \$${resultado.cuotaMensual.toStringAsFixed(0)}'),
+        Text('Cuota mensual: \$${resultado.cuotaMensual.toStringAsFixed(0)}'),
         Text('Costo total: \$${resultado.costoTotal.toStringAsFixed(0)}'),
         Text(
           resultado.mensaje,
           style: TextStyle(
-              color: resultado.esViable ? Colors.green : Colors.red),
+            color: resultado.esViable ? Colors.green : Colors.red,
+          ),
         ),
         if (resultado.recomendacion != null) ...[
           const SizedBox(height: 8),

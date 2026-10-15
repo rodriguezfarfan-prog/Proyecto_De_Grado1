@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'di/injection_container.dart';
 import 'router/app_router.dart';
+import 'package:fin_up_project/core/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initDependencies();
+  await NotificationService.init(); // ← NUEVO
   runApp(const ProviderScope(child: FinUpApp()));
 }
 

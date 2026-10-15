@@ -1,6 +1,5 @@
 const mysql = require('mysql2/promise');
-const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+require('dotenv').config();
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -11,7 +10,8 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  decimalNumbers: true   // ← ESTA LÍNEA ES CLAVE
+  decimalNumbers: true,
+  dateStrings: true   // ← NUEVO: devuelve fechas como string, sin conversión a UTC
 });
 
 module.exports = pool;

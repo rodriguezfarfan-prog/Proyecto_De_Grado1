@@ -10,9 +10,9 @@ class AppShell extends StatelessWidget {
     final location = GoRouterState.of(context).uri.toString();
     if (location.startsWith('/dashboard')) return 0;
     if (location.startsWith('/diagnostico')) return 1;
-    if (location.startsWith('/simulacion')) return 2;
-    if (location.startsWith('/ahorro')) return 3;
-    if (location.startsWith('/recomendaciones')) return 4;
+    if (location.startsWith('/ahorro')) return 2;
+    if (location.startsWith('/simulacion')) return 3;
+
     return 0;
   }
 
@@ -25,13 +25,10 @@ class AppShell extends StatelessWidget {
         context.go('/diagnostico');
         break;
       case 2:
-        context.go('/simulacion');
-        break;
-      case 3:
         context.go('/ahorro');
         break;
-      case 4:
-        context.go('/recomendaciones');
+      case 3:
+        context.go('/simulacion');
         break;
     }
   }
@@ -47,11 +44,19 @@ class AppShell extends StatelessWidget {
         currentIndex: selectedIndex,
         onTap: (index) => _onItemTapped(context, index),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
-          BottomNavigationBarItem(icon: Icon(Icons.assessment), label: 'Diagnóstico'),
-          BottomNavigationBarItem(icon: Icon(Icons.auto_graph), label: 'Simulación'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard),
+            label: 'Dashboard',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.auto_graph),
+            label: 'Movimientos',
+          ),
           BottomNavigationBarItem(icon: Icon(Icons.savings), label: 'Ahorro'),
-          BottomNavigationBarItem(icon: Icon(Icons.tips_and_updates), label: 'Tips'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calculate),
+            label: 'Calculadora',
+          ),
         ],
       ),
     );

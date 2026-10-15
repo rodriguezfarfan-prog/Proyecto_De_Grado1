@@ -1,5 +1,5 @@
-import '/domain/ahorro/entities/meta_ahorro.dart';
-import '/core/value_objects/monto.dart';
+import 'package:fin_up_project/domain/ahorro/entities/meta_ahorro.dart';
+import 'package:fin_up_project/core/value_objects/monto.dart';
 
 class MetaAhorroModel {
   final String id;
@@ -7,7 +7,8 @@ class MetaAhorroModel {
   final String nombre;
   final double montoObjetivo;
   final double montoActual;
-  final String fechaLimite; // ISO 8601
+  final double abonoMensualFijo;
+  final String fechaLimite;
   final String? descripcion;
 
   MetaAhorroModel({
@@ -16,21 +17,23 @@ class MetaAhorroModel {
     required this.nombre,
     required this.montoObjetivo,
     required this.montoActual,
+    required this.abonoMensualFijo,
     required this.fechaLimite,
     this.descripcion,
   });
 
   factory MetaAhorroModel.fromJson(Map<String, dynamic> json) {
-  return MetaAhorroModel(
-    id: json['id'],
-    usuarioId: json['usuario_id'],
-    nombre: json['nombre'],
-    montoObjetivo: (json['monto_objetivo'] as num).toDouble(),
-    montoActual: (json['monto_actual'] as num).toDouble(),
-    fechaLimite: json['fecha_limite'],
-    descripcion: json['descripcion'],
-  );
-}
+    return MetaAhorroModel(
+      id: json['id'],
+      usuarioId: json['usuario_id'],
+      nombre: json['nombre'],
+      montoObjetivo: (json['monto_objetivo'] as num).toDouble(),
+      montoActual: (json['monto_actual'] as num).toDouble(),
+      abonoMensualFijo: (json['abono_mensual_fijo'] as num?)?.toDouble() ?? 0.0,
+      fechaLimite: json['fecha_limite'].toString().replaceFirst(' ', 'T'),
+      descripcion: json['descripcion'],
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -38,6 +41,7 @@ class MetaAhorroModel {
     'nombre': nombre,
     'monto_objetivo': montoObjetivo,
     'monto_actual': montoActual,
+    'abono_mensual_fijo': abonoMensualFijo,
     'fecha_limite': fechaLimite,
     'descripcion': descripcion,
   };
@@ -47,6 +51,7 @@ class MetaAhorroModel {
     nombre: nombre,
     montoObjetivo: Monto(montoObjetivo),
     montoActual: Monto(montoActual),
+    abonoMensualFijo: abonoMensualFijo,
     fechaLimite: DateTime.parse(fechaLimite),
     descripcion: descripcion,
   );

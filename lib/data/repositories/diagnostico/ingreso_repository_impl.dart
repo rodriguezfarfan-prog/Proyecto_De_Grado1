@@ -1,24 +1,24 @@
 import 'package:dartz/dartz.dart';
-import '/core/errors/failure.dart';
-import '/data/datasources/remote/remote_ingreso_datasource.dart';
-import '/data/models/ingreso_model.dart';
-import '/domain/diagnostico/entities/ingreso.dart';
-import '/domain/diagnostico/repositories/ingreso_repository.dart';
+import 'package:fin_up_project/core/errors/failure.dart';
+import 'package:fin_up_project/data/datasources/remote/remote_ingreso_datasource.dart';
+import 'package:fin_up_project/data/models/ingreso_model.dart';
+import 'package:fin_up_project/domain/diagnostico/entities/ingreso.dart';
+import 'package:fin_up_project/domain/diagnostico/repositories/ingreso_repository.dart';
+import 'package:fin_up_project/domain/usuario/repositories/auth_repository.dart';
 
 class IngresoRepositoryImpl implements IngresoRepository {
   final RemoteIngresoDataSource remoteDataSource;
+  final AuthRepository authRepository;
 
-  IngresoRepositoryImpl(this.remoteDataSource);
-
-  // ID de usuario mock (en producción vendrá de la sesión)
-  static const String userId = 'USER_UUID_DE_PRUEBA';
+  IngresoRepositoryImpl(this.remoteDataSource, this.authRepository);
 
   @override
   Future<Either<Failure, List<Ingreso>>> obtenerIngresos() async {
     try {
+      final userId = await authRepository.obtenerUserId();
+      if (userId == null) return Left(ServerFailure('No hay sesión activa'));
       final models = await remoteDataSource.fetchIngresos(userId);
-      final entities = models.map((m) => m.toDomain()).toList();
-      return Right(entities);
+      return Right(models.map((m) => m.toDomain()).toList());
     } catch (e) {
       return Left(ServerFailure('Error al obtener ingresos: $e'));
     }
@@ -27,6 +27,8 @@ class IngresoRepositoryImpl implements IngresoRepository {
   @override
   Future<Either<Failure, Unit>> guardarIngreso(Ingreso ingreso) async {
     try {
+      final userId = await authRepository.obtenerUserId();
+      if (userId == null) return Left(ServerFailure('No hay sesión activa'));
       final model = IngresoModel(
         id: ingreso.id,
         usuarioId: userId,
@@ -39,6 +41,26 @@ class IngresoRepositoryImpl implements IngresoRepository {
       return const Right(unit);
     } catch (e) {
       return Left(ServerFailure('Error al guardar ingreso: $e'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Unit>> actualizarIngreso(Ingreso ingreso) async {
+    try {
+      final userId = await authRepository.obtenerUserId();
+      if (userId == null) return Left(ServerFailure('No hay sesión activa'));
+      final model = IngresoModel(
+        id: ingreso.id,
+        usuarioId: userId,
+        monto: ingreso.monto.valor,
+        fecha: ingreso.fecha.fecha.toIso8601String(),
+        descripcion: ingreso.descripcion,
+        tipo: ingreso.tipo.name,
+      );
+      await remoteDataSource.updateIngreso(model);
+      return const Right(unit);
+    } catch (e) {
+      return Left(ServerFailure('Error al actualizar ingreso: $e'));
     }
   }
 
